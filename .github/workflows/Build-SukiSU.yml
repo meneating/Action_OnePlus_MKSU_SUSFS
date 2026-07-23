@@ -160,7 +160,29 @@ jobs:
         run: |
           mkdir kernel_workspace && cd kernel_workspace
           repo init -u https://github.com/OnePlusOSS/kernel_manifest.git -b refs/heads/oneplus/${{ github.event.inputs.CPU }} -m ${{ github.event.inputs.FEIL }}.xml --depth=1
-          repo sync
+          # CodeLinaro/Gitaly can flake; retry repo sync a few times
+          set +e
+          for i in 1 2 3 4 5; do
+            echo "repo sync attempt $i"
+            repo sync -c -j$(nproc) --no-tags --fail-fast
+            status=$?
+            if [ $status -eq 0 ]; then
+              break
+            fi
+            echo "repo sync failed with $status, retrying in 30s..."
+            sleep 30
+            repo sync -c -j1 --no-tags --fail-fast
+            status=$?
+            if [ $status -eq 0 ]; then
+              break
+            fi
+            sleep 60
+          done
+          set -e
+          if [ ${status:-1} -ne 0 ]; then
+            echo "repo sync failed after retries"
+            exit 1
+          fi
           if [  -e kernel_platform/common/BUILD.bazel ]; then
           sed -i '/^[[:space:]]*"protected_exports_list"[[:space:]]*:[[:space:]]*"android\/abi_gki_protected_exports_aarch64",$/d' kernel_platform/common/BUILD.bazel
           fi
