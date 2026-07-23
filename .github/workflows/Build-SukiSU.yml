@@ -268,13 +268,25 @@ jobs:
         run: |
           cd kernel_workspace/kernel_platform/common
           if [ -f fs/proc/task_mmu.c ]; then
-            echo "Cleaning SUSFS leftovers in task_mmu.c"
+            echo Cleaning SUSFS leftovers in task_mmu.c
+            if ! grep -q 'pragma clang diagnostic ignored' fs/proc/task_mmu.c; then
+              tmp=$(mktemp)
+              {
+                echo '#if defined(__clang__)'
+                echo '#pragma clang diagnostic ignored "-Wunused-function"'
+                echo '#pragma clang diagnostic ignored "-Wunused-label"'
+                echo '#pragma clang diagnostic ignored "-Wunused-variable"'
+                echo '#endif'
+                cat fs/proc/task_mmu.c
+              } > "$tmp"
+              mv "$tmp" fs/proc/task_mmu.c
+            fi
             sed -i 's/struct dentry \*dentry;/struct dentry *dentry __maybe_unused;/g' fs/proc/task_mmu.c
-            # Drop dead SUSFS bypass gotos/labels that clang treats as -Werror unused-label
+            sed -i 's/static void show_vma_header_prefix_fake(/static void __maybe_unused show_vma_header_prefix_fake(/g' fs/proc/task_mmu.c
             sed -i '/goto bypass;$/d' fs/proc/task_mmu.c
             sed -i '/^[[:space:]]*bypass:[[:space:]]*;*[[:space:]]*$/d' fs/proc/task_mmu.c
-            echo "Remaining dentry/bypass refs:"
-            grep -nE 'dentry|bypass' fs/proc/task_mmu.c | head -n 30 || true
+            head -n 15 fs/proc/task_mmu.c || true
+            grep -nE 'show_vma_header_prefix_fake|bypass' fs/proc/task_mmu.c | head -n 30 || true
           fi
           find . -name '*.rej' | head -n 50 || true
 
