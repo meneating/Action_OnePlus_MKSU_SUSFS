@@ -39,7 +39,7 @@ on:
           - oneplus_13r
           - oneplus_ace3_pro_v
           - oneplus_ace5
-          - oneplus_ace5_w
+          - oneplus_ace5_b
           - oneplus_pad2_v
           - oneplus_13
           - oneplus_13t
@@ -159,11 +159,7 @@ jobs:
       - name: Initialize repo and sync
         run: |
           mkdir kernel_workspace && cd kernel_workspace
-          if [ "${{ github.event.inputs.FEIL }}" = "oneplus_ace5_w" ]; then
-            repo init -u "https://github.com/${{ github.repository }}.git" -b refs/heads/main -m manifests/oneplus_ace5_w.xml --depth=1
-          else
-            repo init -u https://github.com/OnePlusOSS/kernel_manifest.git -b refs/heads/oneplus/${{ github.event.inputs.CPU }} -m ${{ github.event.inputs.FEIL }}.xml --depth=1
-          fi
+          repo init -u https://github.com/OnePlusOSS/kernel_manifest.git -b refs/heads/oneplus/${{ github.event.inputs.CPU }} -m ${{ github.event.inputs.FEIL }}.xml --depth=1
           repo sync
           if [  -e kernel_platform/common/BUILD.bazel ]; then
           sed -i '/^[[:space:]]*"protected_exports_list"[[:space:]]*:[[:space:]]*"android\/abi_gki_protected_exports_aarch64",$/d' kernel_platform/common/BUILD.bazel
@@ -178,14 +174,15 @@ jobs:
       - name: Force remove -dirty suffix
         run: |
           cd kernel_workspace/kernel_platform
-          sed -i 's/ -dirty//g' common/scripts/setlocalversion
-          sed -i 's/ -dirty//g' msm-kernel/scripts/setlocalversion
-          sed -i 's/ -dirty//g' external/dtc/scripts/setlocalversion
-          sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' common/scripts/setlocalversion
+          for f in common/scripts/setlocalversion msm-kernel/scripts/setlocalversion external/dtc/scripts/setlocalversion; do
+            if [ -f "$f" ]; then
+              sed -i 's/ -dirty//g' "$f"
+            else
+              echo "skip missing $f"
+            fi
+          done
           git add -A
-          git commit -m "Force remove -dirty suffix from kernel version"
-
-      # 添加 SukiSU Ultra
+          git diff --cached --quiet || git commit -m "Force remove -dirty suffix from kernel version"
       - name: Add KernelSU-SukiSU Ultra
         run: |
           cd kernel_workspace/kernel_platform
@@ -464,3 +461,4 @@ jobs:
         with:
           name: AnyKernel3_SukiSUUltra_${{ env.KSUVER }}_${{ steps.feil_clean.outputs.value }}${{ steps.suffix.outputs.value }}
           path: ./AnyKernel3/*
+
